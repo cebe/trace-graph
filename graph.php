@@ -1,16 +1,24 @@
 <?php
 
 //print_r($argv);
+//
 
+if (isset($argv[1])) {
+	$dir = $argv[1];
+} else {
+	$dir = __DIR__ . '/traces';
+}
 
-$dir = __DIR__ . '/traces';
+$resolveHosts = true;
+//$resolveHosts = false;
 
 $edges = array();
 foreach (glob($dir . '/*') as $filename) {
 	$route = parseTrace(file($filename));
-	$edges = array_merge($edges, route2graph($route));
+	$edges = array_merge($edges, route2graph($route, $resolveHosts));
 }
 renderDotFile($edges);
+
 
 
 
@@ -29,14 +37,26 @@ function renderDotFile($edges)
 	echo "}\n";
 }
 
-function route2graph($route)
+function route2graph($route, $resolveHosts)
 {
 	$edges = array();
 	$last = null;
 	foreach($route as $layer) {
 		if ($last !== null) {
-			foreach($last as $serverA => $timeA) {
-				foreach($layer as $serverB => $timeB) {
+			if (empty($last)) {
+				$serverA = '???';
+				foreach($layer as $serverB) {
+					$serverB = $resolveHosts ? $serverB->getHostName() : $serverB->ip;
+					$edges[] = array($serverA, $serverB);
+				}
+			}
+			foreach($last as $serverA) {
+				$serverA = $resolveHosts ? $serverA->getHostName() : $serverA->ip;
+				if (empty($layer)) {
+					$edges[] = array($serverA, '???');
+				}
+				foreach($layer as $serverB) {
+					$serverB = $resolveHosts ? $serverB->getHostName() : $serverB->ip;
 					$edges[] = array($serverA, $serverB);
 				}
 			}
@@ -63,9 +83,12 @@ function parseTrace($trace)
 				if (preg_match_all('/(' . $ip . ')\s+((?:\d+\.\d+\s+ms\s*|\*\s*)+)/', trim($line), $matches, PREG_SET_ORDER)) {
 					foreach($matches as $match) {
 						if (isset($servers[$match[1]])) {
-							$servers[$match[1]] = array_merge($servers[$match[1]], parseTime($match[2]));
+							$servers[$match[1]]->time = array_merge($servers[$match[1]]->time, parseTime($match[2]));
 						} else {
-							$servers[$match[1]] = parseTime($match[2]);
+							$server = new Server();
+							$server->ip = $match[1];
+							$server->time = parseTime($match[2]);
+							$servers[$match[1]] = $server;
 						}
 					}
 				}
@@ -79,4 +102,23 @@ function parseTrace($trace)
 function parseTime($time)
 {
 	return array_map('trim', explode(' ms', $time));
+}
+
+class Server
+{
+	public $ip;
+	public $time = array();
+	public $start = false;
+	public $end = false;
+
+
+	private static $cache = array();
+	public function getHostName()
+	{
+		$ip = $this->ip;
+		if (!isset(static::$cache[$ip])) {
+			static::$cache[$ip] = gethostbyaddr($ip);
+		}
+		return static::$cache[$ip];
+	}
 }
