@@ -29,3 +29,7 @@ php graph.php | neato -Tpng -o network.png
 ```
 php graph.php | sfdp -Tpng -o network.png
 ```
+
+Example created with `sfdp` and traceroute to `google.com`:
+
+![Example traceroute graph google.com](https://raw.github.com/cebe/trace-graph/master/example.png)
