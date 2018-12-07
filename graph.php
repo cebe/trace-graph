@@ -80,7 +80,7 @@ function parseTrace($trace)
 			if (is_numeric($num)) {
 				$line = substr($line, $pos + 1);
 				$servers = array();
-				if (preg_match_all('/(' . $ip . ')\s+((?:\d+\.\d+\s+ms\s*|\*\s*)+)/', trim($line), $matches, PREG_SET_ORDER)) {
+				if (preg_match_all('/(' . $ip . ')\)?\s+((?:\d+\.\d+\s+ms\s*|\*\s*)+)/', trim($line), $matches, PREG_SET_ORDER)) {
 					foreach($matches as $match) {
 						if (isset($servers[$match[1]])) {
 							$servers[$match[1]]->time = array_merge($servers[$match[1]]->time, parseTime($match[2]));
