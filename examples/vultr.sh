@@ -27,7 +27,7 @@ traceroute -n -q 10 lax-ca-us-ping.vultr.com  > $TRACEDIR/lax-ca-us-ping.vultr.c
 # australia
 traceroute -n -q 10 syd-au-ping.vultr.com  > $TRACEDIR/syd-au-ping.vultr.com
 
-php graph.php $TRACEDIR/ > vultr.dot
+php ../graph.php $TRACEDIR/ > vultr.dot
 cat vultr.dot | dot -Tpng -o vultr.dot.png
 cat vultr.dot | neato -Tpng -o vultr.neato.png
 cat vultr.dot | sfdp -Tpng -o vultr.sfdp.png
