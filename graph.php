@@ -13,28 +13,49 @@ $resolveHosts = true;
 //$resolveHosts = false;
 
 $edges = array();
+$firsts = array();
+$lasts = array();
 foreach (glob($dir . '/*') as $filename) {
 	$route = parseTrace(file($filename));
+	$first = reset($route);
+	$last = end($route);
+	foreach($first as $f => $ff) {
+		$firsts[$f] = $ff;
+	}
+	foreach($last as $l => $ll) {
+		$lasts[$l] = $ll;
+	}
 	$edges = array_merge($edges, route2graph($route, $resolveHosts));
 }
-renderDotFile($edges);
+renderDotFile($edges, $firsts, $lasts, $resolveHosts);
 
 
 
 
-function renderDotFile($edges)
+function renderDotFile($edges, $firsts, $lasts, $resolveHosts)
 {
 	echo "digraph network {\n";
 	echo "\trankdir=LR;\n";
-	echo "\toverlap=prism;\n";
+	echo "\toverlap=prism;\n\n";
+
+	foreach($firsts as $f => $ff) {
+		$server = $resolveHosts ? $ff->getHostName() : $ff->ip;
+        echo "\t\"" . $server . '" [style="bold,filled",fillcolor = lightblue];' . "\n";
+	}
+	echo "\n";
+	foreach($lasts as $f => $ff) {
+		$server = $resolveHosts ? $ff->getHostName() : $ff->ip;
+        echo "\t\"" . $server . '" [style="bold,filled",fillcolor = brown1];' . "\n";
+	}
+	echo "\n";
 
 	$arrows = array();
 	foreach($edges as $e) {
-		$arrows[] = "\t\"" . $e[0] . "\" -> \"" . $e[1] . "\";";
+		$arrows[] = "\t\"" . $e[0] . "\" -> \"" . $e[1] . "\"".(empty($e[2]) ? '' : '[label="' . round(array_sum($e[2])/count($e[2])) . 'ms"]').";";
 	}
-	echo implode("\n", array_unique($arrows));
+	echo implode("\n", $arrows);
 
-	echo "}\n";
+	echo "\n}\n";
 }
 
 function route2graph($route, $resolveHosts)
@@ -44,20 +65,21 @@ function route2graph($route, $resolveHosts)
 	foreach($route as $layer) {
 		if ($last !== null) {
 			if (empty($last)) {
-				$serverA = '???';
+				$serverA = '???' . Counter::$gapCount;
 				foreach($layer as $serverB) {
-					$serverB = $resolveHosts ? $serverB->getHostName() : $serverB->ip;
-					$edges[] = array($serverA, $serverB);
+					$serverBn = $resolveHosts ? $serverB->getHostName() : $serverB->ip;
+					$edges[$serverA.'_'.$serverBn] = array($serverA, $serverBn, $serverB->time);
 				}
 			}
 			foreach($last as $serverA) {
 				$serverA = $resolveHosts ? $serverA->getHostName() : $serverA->ip;
 				if (empty($layer)) {
-					$edges[] = array($serverA, '???');
+					Counter::$gapCount++;
+					$edges[$serverA.'_???'.Counter::$gapCount] = array($serverA, '???'.Counter::$gapCount, []);
 				}
 				foreach($layer as $serverB) {
-					$serverB = $resolveHosts ? $serverB->getHostName() : $serverB->ip;
-					$edges[] = array($serverA, $serverB);
+					$serverBn = $resolveHosts ? $serverB->getHostName() : $serverB->ip;
+					$edges[$serverA.'_'.$serverBn] = array($serverA, $serverBn, $serverB->time);
 				}
 			}
 		}
@@ -73,6 +95,10 @@ function parseTrace($trace)
 	$ip = '(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)';
 	foreach($trace as $line) {
 		$line = trim($line);
+		if (preg_match('~^traceroute to (\S+) \(([^\)]+)\)~i', $line, $m)) {
+			Server::$cache[$m[2]] = $m[1];
+			continue;
+		}
 
 		if (($pos = strpos($line, ' ')) !== false) {
 			$num = substr($line, 0, $pos);
@@ -104,6 +130,11 @@ function parseTime($time)
 	return array_map('trim', explode(' ms', $time));
 }
 
+class Counter
+{
+	public static $gapCount = 0;
+}
+
 class Server
 {
 	public $ip;
@@ -112,7 +143,7 @@ class Server
 	public $end = false;
 
 
-	private static $cache = array();
+	public static $cache = array();
 	public function getHostName()
 	{
 		$ip = $this->ip;
